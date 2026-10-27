@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jarvis AI</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #07111f;
+      color: #eaf7ff;
+      font-family: Arial, sans-serif;
+    }
+    .app {
+      width: 85%;
+      max-width: 420px;
+      text-align: center;
+      padding: 25px;
+      border: 1px solid #16bde8;
+      border-radius: 24px;
+      background: #0d1c2d;
+    }
+    h1 { color: #35d9ff; }
+    .orb {
+      font-size: 70px;
+      margin: 20px;
+      color: #35d9ff;
+    }
+    button {
+      background: #13bde5;
+      color: #06111e;
+      border: 0;
+      border-radius: 30px;
+      padding: 14px 24px;
+      font-size: 17px;
+      font-weight: bold;
+    }
+    #status, #result {
+      margin: 20px 0;
+      overflow-wrap: anywhere;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>JARVIS</h1>
+    <p>Personal Hindi Voice Assistant</p>
+    <div class="orb">◉</div>
+
+    <button id="mic">🎙️ Bolo Jarvis</button>
+    <p id="status">Ready hoon.</p>
+    <p id="result">Tumhari baat yahan dikhegi.</p>
+  </main>
+
+  <script>
+    const status = document.getElementById("status");
+    const result = document.getElementById("result");
+    const mic = document.getElementById("mic");
+
+    const SpeechRecognition =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
+    function speak(text) {
+      if (!("speechSynthesis" in window)) {
+        status.textContent = "Voice output supported nahi hai.";
+        return;
+      }
+
+      speechSynthesis.cancel();
+      const voice = new SpeechSynthesisUtterance(text);
+      voice.lang = "hi-IN";
+      voice.rate = 0.95;
+      speechSynthesis.speak(voice);
+    }
+
+    if (!SpeechRecognition) {
+      status.textContent =
+        "Is browser mein voice recognition supported nahi hai.";
+      mic.disabled = true;
+    } else {
+      const recognition = new SpeechRecognition();
+      recognition.lang = "hi-IN";
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      mic.onclick = () => {
+        status.textContent = "Sun raha hoon...";
+        recognition.start();
+      };
+
+      recognition.onresult = (event) => {
+        const text = event.results[0][0].transcript;
+        result.textContent = "Tum: " + text;
+
+        const command = text.toLowerCase();
+        let reply;
+
+        if (command.includes("namaste") ||
+            command.includes("hello") ||
+            command.includes("jarvis")) {
+          reply = "Namaste! Main Jarvis hoon. Batao, kya karna hai?";
+        } else if (command.includes("naam")) {
+          reply = "Mera naam Jarvis hai.";
+        } else if (command.includes("samay") ||
+                   command.includes("time")) {
+          reply = "Abhi samay hai " +
+            new Date().toLocaleTimeString("hi-IN");
+        } else if (command.includes("band") ||
+                   command.includes("bye")) {
+          reply = "Theek hai. Phir milenge.";
+        } else {
+          reply = "Maine suna: " + text +
+            ". Abhi main basic version hoon.";
+        }
+
+        status.textContent = "Jarvis: " + reply;
+        speak(reply);
+      };
+
+      recognition.onerror = (event) => {
+        status.textContent =
+          "Error: " + event.error +
+          ". Mic permission aur internet check karo.";
+      };
+
+      recognition.onend = () => {
+        mic.disabled = false;
+      };
+
+      recognition.onstart = () => {
+        mic.disabled = true;
+      };
+    }
+  </script>
+</body>
+</html>
