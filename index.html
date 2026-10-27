@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07111f">
   <title>Jarvis AI</title>
   <style>
     body {
@@ -12,7 +13,8 @@
       place-items: center;
       background: #07111f;
       color: #eaf7ff;
-      font-family: Arial, sans-serif;
+      /* CHANGE: Devanagari font add kiya taaki Hindi text sahi dikhe */
+      font-family: Arial, "Noto Sans Devanagari", sans-serif;
     }
     .app {
       width: 85%;
@@ -38,11 +40,15 @@
       font-size: 17px;
       font-weight: bold;
     }
+    /* CHANGE: sunte waqt button thoda dim dikhe */
+    button:disabled { opacity: 0.6; }
     #status, #result {
       margin: 20px 0;
       overflow-wrap: anywhere;
       line-height: 1.6;
     }
+    /* CHANGE: users ko batane ke liye kya bolna hai */
+    .hint { font-size: 14px; opacity: 0.65; }
   </style>
 </head>
 <body>
@@ -54,9 +60,14 @@
     <button id="mic">🎙️ Bolo Jarvis</button>
     <p id="status">Ready hoon.</p>
     <p id="result">Tumhari baat yahan dikhegi.</p>
+    <p class="hint">Try karo: "नमस्ते" • "समय क्या हुआ" • "तुम्हारा नाम क्या है"</p>
   </main>
 
   <script>
+    // NOTE: Is file mein koi secret API key NAHI hai.
+    // Aage AI/LLM jodna ho to key hamesha backend (server) par rakhna,
+    // kabhi bhi yahan frontend code mein nahi.
+
     const status = document.getElementById("status");
     const result = document.getElementById("result");
     const mic = document.getElementById("mic");
@@ -64,6 +75,22 @@
     const SpeechRecognition =
       window.SpeechRecognition ||
       window.webkitSpeechRecognition;
+
+    // ---------- Hindi awaaz chunna ----------
+    // CHANGE: Android par agar Hindi voice installed hai to wahi use hogi.
+    let hindiVoice = null;
+    function loadHindiVoice() {
+      if (!("speechSynthesis" in window)) return;
+      const voices = speechSynthesis.getVoices();
+      hindiVoice =
+        voices.find(v => v.lang.toLowerCase().replace("_", "-").startsWith("hi")) ||
+        null;
+    }
+    loadHindiVoice();
+    if ("speechSynthesis" in window) {
+      // Chrome mein voices der se load hoti hain, isliye ye event zaroori hai
+      speechSynthesis.onvoiceschanged = loadHindiVoice;
+    }
 
     function speak(text) {
       if (!("speechSynthesis" in window)) {
@@ -74,13 +101,78 @@
       speechSynthesis.cancel();
       const voice = new SpeechSynthesisUtterance(text);
       voice.lang = "hi-IN";
+      if (hindiVoice) voice.voice = hindiVoice;
       voice.rate = 0.95;
       speechSynthesis.speak(voice);
     }
 
+    // ---------- Time aur greeting ke helper functions ----------
+    // CHANGE: naye helper functions. Replies ab Devanagari (हिंदी) mein hain,
+    // kyunki Hindi voice Devanagari text ko sabse accha bolti hai.
+    function hindiPeriod(hour) {
+      if (hour >= 5 && hour < 12) return "सुबह";
+      if (hour >= 12 && hour < 16) return "दोपहर";
+      if (hour >= 16 && hour < 20) return "शाम";
+      return "रात";
+    }
+
+    function getTimeReply() {
+      const now = new Date();
+      const h24 = now.getHours();
+      const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+      const m = now.getMinutes();
+      const period = hindiPeriod(h24);
+      return m === 0
+        ? `अभी ${period} के ${h12} बजे हैं।`
+        : `अभी ${period} के ${h12} बजकर ${m} मिनट हुए हैं।`;
+    }
+
+    function getGreetingReply() {
+      const h = new Date().getHours();
+      let wish = "नमस्ते";
+      if (h >= 5 && h < 12) wish = "सुप्रभात";
+      else if (h >= 12 && h < 17) wish = "नमस्कार";
+      else if (h >= 17 && h < 21) wish = "शुभ संध्या";
+      return `${wish}! मैं जार्विस हूँ। बताओ, क्या करना है?`;
+    }
+
+    // ---------- Command samajhna ----------
+    // CHANGE: pehle sirf Roman words (namaste, samay...) check hote the.
+    // Hindi mic (hi-IN) Devanagari text deta hai, isliye dono tarah ke
+    // words ab check hote hain.
+    function getReply(text) {
+      const command = text.toLowerCase().trim();
+      const has = (...words) => words.some(w => command.includes(w));
+
+      // Time pehle check hota hai, taaki "जार्विस समय बताओ" greeting na ban jaye
+      if (has("समय", "टाइम", "बजे", "samay", "time")) {
+        return getTimeReply();
+      }
+      if (has("नाम", "naam")) {
+        return "मेरा नाम जार्विस है।";
+      }
+      if (has("बंद", "अलविदा", "बाय", "band", "bye")) {
+        return "ठीक है। फिर मिलते हैं।";
+      }
+      if (has("नमस्ते", "नमस्कार", "हेलो", "हैलो", "हेल्लो", "हाय",
+              "जार्विस", "जारविस", "namaste", "hello", "jarvis")) {
+        return getGreetingReply();
+      }
+      return "मैंने सुना: " + text + "। अभी मैं बेसिक वर्ज़न हूँ।";
+    }
+
+    // Ek jagah se: dikhao + jawab nikalo + bolo
+    function handleCommand(text) {
+      result.textContent = "Tum: " + text;
+      const reply = getReply(text);
+      status.textContent = "Jarvis: " + reply;
+      speak(reply);
+    }
+
+    // ---------- Mic (Hindi sunna) ----------
     if (!SpeechRecognition) {
       status.textContent =
-        "Is browser mein voice recognition supported nahi hai.";
+        "Is browser mein voice recognition supported nahi hai. Android Chrome use karo.";
       mic.disabled = true;
     } else {
       const recognition = new SpeechRecognition();
@@ -89,43 +181,32 @@
       recognition.interimResults = false;
 
       mic.onclick = () => {
+        if ("speechSynthesis" in window) speechSynthesis.cancel(); // Jarvis bol raha ho to pehle chup karao
         status.textContent = "Sun raha hoon...";
-        recognition.start();
+        // CHANGE: try/catch, taaki start fail hone par page na ruke
+        try {
+          recognition.start();
+        } catch (e) {
+          status.textContent = "Dobara try karo.";
+        }
       };
 
       recognition.onresult = (event) => {
-        const text = event.results[0][0].transcript;
-        result.textContent = "Tum: " + text;
-
-        const command = text.toLowerCase();
-        let reply;
-
-        if (command.includes("namaste") ||
-            command.includes("hello") ||
-            command.includes("jarvis")) {
-          reply = "Namaste! Main Jarvis hoon. Batao, kya karna hai?";
-        } else if (command.includes("naam")) {
-          reply = "Mera naam Jarvis hai.";
-        } else if (command.includes("samay") ||
-                   command.includes("time")) {
-          reply = "Abhi samay hai " +
-            new Date().toLocaleTimeString("hi-IN");
-        } else if (command.includes("band") ||
-                   command.includes("bye")) {
-          reply = "Theek hai. Phir milenge.";
-        } else {
-          reply = "Maine suna: " + text +
-            ". Abhi main basic version hoon.";
-        }
-
-        status.textContent = "Jarvis: " + reply;
-        speak(reply);
+        handleCommand(event.results[0][0].transcript);
       };
 
+      // CHANGE: common errors ke liye saaf Hinglish messages
       recognition.onerror = (event) => {
+        const messages = {
+          "not-allowed": "Mic permission nahi mili. Chrome ki site settings mein Microphone Allow karo.",
+          "service-not-allowed": "Mic permission nahi mili. Chrome ki site settings mein Microphone Allow karo.",
+          "no-speech": "Kuch sunai nahi diya. Dobara bolo.",
+          "audio-capture": "Mic nahi mila. Check karo mic chalu hai.",
+          "network": "Internet problem hai. Voice recognition ke liye internet chahiye."
+        };
         status.textContent =
-          "Error: " + event.error +
-          ". Mic permission aur internet check karo.";
+          messages[event.error] ||
+          "Error: " + event.error + ". Mic permission aur internet check karo.";
       };
 
       recognition.onend = () => {
